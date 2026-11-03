@@ -22,6 +22,10 @@ micro-VM, and also verified on macOS, see below). Treat it as a starting point a
 host — but please report bugs you find here rather than only fixing them in a fork; see
 [Bugs, fixes and upstreaming](#bugs-fixes-and-upstreaming).
 
+**Like it? Help it along.** A star on the repository, an issue when something breaks (with your hardware and the
+log), and pull requests are all welcome. If you keep a fork with a fix or an improvement, please open a pull request
+here too: it gets reviewed, credited to you and shipped to everyone.
+
 **macOS.** The same patched FEX also runs VRChat with genuine EAC on an Apple M2 MacBook Air under macOS 27, inside
 the [steamac](https://github.com/fxgl/steamac) libkrun guest (Valve's ARM64 SteamOS, Steam's own FEX compatibility tool
 swapped for the patched build). Result, timings and limits: [docs/macos-port.md](docs/macos-port.md). Setup and
