@@ -1,12 +1,12 @@
 # The patch series
 
-Twenty-seven patches against **FEX-Emu 2610** (base commit `14c9268`). 0001–0010 were developed and measured on 2609.1
+Sixty-two patches against **FEX-Emu 2610** (base commit `14c9268`). 0001–0010 were developed and measured on 2609.1
 (`9fbdc00`) and rebase onto 2610 with no code changes; 0011–0020 were written against 2610; 0022–0026 on top of 0001–0020
-(`0021` is withdrawn, see below); 0033 and 0035 were added on top of 0026. They are not all the same kind of thing, so they are
+(`0021` is withdrawn, see below); 0033 and 0035 were added on top of 0026, 0036–0039 and 0041–0053 (group H) in `eac-2610.3`, 0054–0070 (group I) in `eac-2610.4`, and 0071 (group J) in `eac-2610.5`. They are not all the same kind of thing, so they are
 grouped here by what they are for.
 
 **Where the code lives.** Each patch is one commit on branch `eac-2610` of [StonkGuy/FEX](https://github.com/StonkGuy/FEX/tree/eac-2610) (release tag
-`eac-2610.2`), and every test named below is in that branch's
+`eac-2610.5`), and every test named below is in that branch's
 [`eac-tests/`](https://github.com/StonkGuy/FEX/tree/eac-2610/eac-tests). `patches/` here is a generated snapshot of
 those commits; send changes to the fork.
 
@@ -21,6 +21,9 @@ The groups:
 | **E. Kernel-fidelity gaps** | 0011, 0012, 0013, 0014, 0015, 0033 | the answers a real kernel gives for `arch_prctl`, the debug registers, `/proc/<pid>/status`, unknown regsets, `restart_syscall` and `/proc/<pid>/maps` |
 | **F. Signal frames and faults** | 0016–0020 | what Windows exception handling under Wine reads from and writes to a signal frame |
 | **G. Second title** | 0022–0026 | what a second title's anti-tamper bootstrapper (THE FINALS) observes: host stack per SIGSYS trap, faults on FEX's own mappings, single-step after `iretq`, a thread exiting on its signal stack |
+| **H. Fixes since `eac-2610.2`** | 0036–0039, 0041–0053 | trap, signal, exec and SMC paths that Wine 11, the EAC launcher or a test observed differently from Linux |
+| **I. Fixes since `eac-2610.3`** | 0054–0070 | exceptions THE FINALS' anti-tamper code probes, fault-safe guest code reads, the fork's disk-cache version, a decode backport, SMC restarts |
+| **J. Fixes since `eac-2610.4`** | 0071 | Proton Experimental 11.0-20261027b's retry of EAC's native syscalls under Syscall User Dispatch |
 
 Patches 0001–0010 are needed for the game (0001 to inject at all, 0002 so the injected client finishes loading, 0007 to
 avoid the disconnects, 0010 for the seccomp/SIGSYS path; 0008 is a correctness fix in the same area and 0004 is
@@ -325,8 +328,8 @@ anything on the common path.
 
 **Without them:** the bootstrapper's first thread spins forever in FEX's fault handler (0023), its single-step check
 fails and it writes a crash dump (0025), and a seccomp-heavy Wine thread dies of host-stack exhaustion (0022). With
-0022–0026 the title gets past its bootstrapper and starts its anti-cheat runtime; it then stops inside the anti-cheat's
-own integrity checks, which this project does not work on.
+0022–0026 the title gets past its bootstrapper and starts its anti-cheat runtime; it then stopped at exceptions its
+anti-tamper code probes, which group I (0054–0070) raises like a CPU. With both groups the title plays.
 
 **Cost.** 0022 is per-trap work only, 0023 per host fault inside the shadow-stack allocation, 0025 only on `iretq` and on
 blocks compiled while TF is set, 0026 only on thread exit.
@@ -338,6 +341,78 @@ syscalls crashed 3/3 without 0026 and completes 160/160 with it, as natively.
 On VRChat the five patches change nothing measurable: in back-to-back idle in-world runs under the same host
 conditions, 0001–0020 gave 37.7 and 41.3 fps and 0001–0026 gave 39.0, 48.6 and 41.7 fps (1% lows 17.5–18.7 and
 18.4–22.1), every run joined a world, and the EAC launcher finished with `301` on the 0001–0026 build.
+
+## H. Fixes since `eac-2610.2` — patches 0036–0039, 0041–0053
+
+Added in `eac-2610.3`, each through a pull request on the fork with its test in `eac-tests/`. Since they arrive through
+merged pull requests, their commit order is not their number order; `patches/` keeps the commit order. 0034 and 0040
+are held (no consumer yet) and are not in the release.
+
+| patch | behaviour | stock FEX | patched | test |
+|---|---|---|---|---|
+| 0036 | a `SECCOMP_RET_TRAP` syscall never runs and its SIGSYS is forced, as Linux does | with SIGSYS blocked the trapped syscall ran as a Linux syscall | rolled back, SIGSYS forced (default action if blocked or ignored) | `eac-tests/seccomp-trap-blocked` |
+| 0037 | a code page is write-protected before its translation is published | a second thread compiling from the same page could run stale code after a store | protection first, then publish | `eac-tests/smc-same-page` |
+| 0038 | `execve` with a seccomp filter installed keeps the `FEX_EXECVEFD` path for FD execs only | a `#!` script exec failed with `FEX_NEEDSSECCOMP=1` | same condition as without seccomp | `eac-tests/execve-seccomp` |
+| 0039 | an FD `execveat` through the FEX loader keeps `argv[0]` | `fexecve()` argv shifted by one | caller's `argv[0]` kept | `eac-tests/fdexec-argv` |
+| 0041 | every `rt_sigreturn` restores the interrupted `InSyscallInfo` | the next async signal built its frame from a stale, higher RSP over live stack (Go/.NET preemption) | no stale marker | `eac-tests/sigreturn-syscallinfo` |
+| 0042 | bad user pointers in FEX's own syscall handlers return `-EFAULT` | SIGSEGV inside FEX killed the process | `-EFAULT`, as Linux | `eac-tests/syscall-efault`, unittests |
+| 0043 | `FEX_SIGNALTRACE`'s `/dev/shm` ring is unlinked on exit (follow-up to 0007) | left behind (16 MiB per process) | removed on a regular exit | `eac-tests/sigtrace-unlink` |
+| 0044 | every I/O step of the synthesized `/proc/<pid>/maps` is checked (follow-up to 0033) | a short write or `EINTR` truncated the file | retried; on failure the host file is used | `eac-tests/proc-maps` |
+| 0045 | a kernel write (`read`, `recvfrom`, ...) into a page holding translated code succeeds | `EFAULT` or a short count | code invalidated and page made writable first (FEX-Emu#5874) | `eac-tests/smc-kernel-write` |
+| 0046 | an x86-64 `munmap` may cross 4 GiB | `EOVERFLOW` (Chromium-based clients abort) | host `munmap`, 32-bit allocator told (FEX-Emu#5847) | `eac-tests/munmap-4g` |
+| 0047 | FEX's own SIGBUS alignment stops are hidden from a ptrace tracer | the EAC launcher of The Division 2 saw ~1000 SIGBUS stops and failed with error 210 | hidden like FEX's SIGTRAP/SIGSEGV stops (by yungtry) | `eac-tests/ptrace-sigbus` |
+| 0048, 0049 | `prctl(PR_SET_SYSCALL_USER_DISPATCH)` is emulated per thread | passed to the host (`EINVAL` on Arm64), so Wine 11's raw-syscall trap path ran Windows syscalls as Linux ones | SIGSYS with `SYS_USER_DISPATCH`, one branch per syscall when unused | `eac-tests/sigsys-redirect` |
+| 0050 | reserved EFLAGS bit 31 stays clear in signal frames taken outside JIT code | the packed overflow flag leaked as bit 31 (`0x80000ad7` vs `0xad7`) into the Windows CONTEXT | bit clear | `eac-tests/sigsys-redirect` |
+| 0051, 0052 | only the trap's own SIGSYS (seccomp or Syscall User Dispatch) takes the resume address | an async signal arriving between filter and delivery swallowed the trap | the trap is always delivered | `eac-tests/signal-race` |
+| 0053 | a trap frame whose handler switches context instead of returning releases its host stack | ~2.9 KiB host stack leaked per trap; Wine's raw `NtContinue` pattern crashed after ~200 000 traps in a memory-limited VM | reused on the next trap | `eac-tests/sigsys-redirect` (phase C) |
+
+**Cost.** 0048 adds one branch per syscall; 0045 one compare and one VMA lookup per affected syscall when SMC tracking
+is on; the others act only on their own path (traps, faults, exec, exit).
+
+## I. Fixes since `eac-2610.3` — patches 0054–0070
+
+Added in `eac-2610.4`, each through a pull request on the fork with its test. Most were found on THE FINALS, whose
+anti-tamper code probes exceptions a real CPU raises; 0070 on Hell Let Loose. Three commits only bump the fork's
+DiskCache format revision for a codegen change (0057, 0062, 0068) and three update the instruction-count CI after one
+(0058, 0063, 0069); they belong to the row of the change that needed them.
+
+| patch | behaviour | stock FEX | patched | test |
+|---|---|---|---|---|
+| 0054 | IRETQ with RFLAGS.NT = 1 raises #GP(0) before it pops anything | executed as a normal IRETQ | SIGSEGV, `SI_KERNEL`, trapno 13, frame intact | `eac-tests/iret-nt`, `eac-tests/wine-ntflag` |
+| 0055, 0057 | MOV to FS/GS in 64-bit mode is a data segment load against Linux's GDT | refused as undecodable (Wine: illegal instruction) | null or user selectors load with base 0; others #GP with the selector as error code | `eac-tests/seg-load64` |
+| 0056, 0058 | the disk cache key carries a format version of the fork's own (`0x8000 \| revision << 8 \| upstream`) | upstream's version 30: a cache filled by one build was reused by the next, so blocks translated before a fix kept running | each codegen change bumps the revision (now `0x841E`) | InstCountCI |
+| 0059 | an instruction that runs from executable memory into memory that is not reports the end of the executable range as its fetch fault address | RIP reported as `si_addr` | first byte it could not fetch, RIP at the instruction | `eac-tests/insn-straddle` |
+| 0060–0063 | instructions longer than 15 bytes, and XSETBV in user mode, raise #GP(0) | SIGILL, a fetch fault, or (immediate/displacement) executed; XSETBV SIGILL with trapno 0 (Wine: "unexpected trap 0") | #GP(0) as a CPU raises it | `eac-tests/insn-toolong` |
+| 0064 | a fetch fault takes the range end as its address only when it lies within 15 bytes of RIP | after another thread made the page executable, an address no instruction at RIP can reach (THE FINALS decrypts code pages on execute faults from several threads; Unreal crashed) | otherwise the instruction's first byte faulted, as on hardware | `eac-tests/insn-straddle` |
+| 0065 | guest code is read fault-safely while compiling | a read-ahead fault on a page another thread revoked reached the guest handler with the compiler's frames below it, leaking a code-invalidation lock hold (THE FINALS froze in a match) | the decode stops at the unreadable byte | `eac-tests/decode-race` |
+| 0066–0069 | two-byte `0F B8/BC/BD` decode with F2/F3/66 prefixes in any order (backport of upstream 68f4c5fbc and its test 95a305bc4) | `F3 66 0F B8` SIGILL, `F3 66 0F BC/BD` as BSF/BSR | POPCNT / TZCNT / LZCNT | `unittests/ASM/FEX_bugs/two_byte_0xbx` |
+| 0070 | a store that faults on a page with translated code restarts its instruction only when it can reach the running block (64 bytes around the fault address) | every data store next to running code restarted the instruction from mid-instruction state: `adc`/`rcl`/`rcr` reused the CF they produced, `pop` to memory and `fstp` popped twice (Hell Let Loose: EAC `210 (#2)`) | the store completes; stores into the block still restart | `eac-tests/smc-restart-state` |
+
+**Cost.** 0054 one flag test per IRETQ; 0055 only on MOV to FS/GS; 0060 a length check in the decoder; the others act
+only on their own path (faults, decode of unreadable bytes, SMC write faults).
+
+**Verified by.** Each test passes natively on x86-64 (GitHub runners) and under the patched FEX. In the SteamOS guest
+on the release code: `eac-tests/run-all.sh` 33/33 expected (the `eac-2610.2`-era build gave 30/31), `sigsys-redirect`
+30/30 runs, and VRChat with EAC (flat, Proton Experimental) joined a world with EAC Session Begin on 3 launches (two stayed 10 min, one 2 min); one more launch hit the intermittent world-load freeze that the `eac-2610.2`-era build shows as well (not FEX-specific).
+
+## J. Fixes since `eac-2610.4` — patch 0071
+
+Added in `eac-2610.5` through a pull request on the fork with its test. Proton Experimental 11.0-20261027b (Valve
+Wine, "HACK: Allow native syscalls for EAC") sets `WINE_HACK_NATIVE_SYSCALLS=1` for `start_protected_game.exe`. EAC's
+bootstrapper then makes raw Linux syscalls from its own code at `0x7001'0000'0000`; each one traps under Syscall User
+Dispatch, and Wine's `sigsys_handler` re-arms the dispatch range from inside the handler and retries the syscall by
+moving `rip` back by 2.
+
+| patch | behaviour | stock FEX | patched | test |
+|---|---|---|---|---|
+| 0071 | `rt_sigreturn` of a seccomp or Syscall User Dispatch trap frame always resumes the guest from the frame | a handler that moved `rip` back onto the trapped `syscall` made the frame look unchanged, and FEX resumed the abandoned syscall handler: EAC's bootstrapper died (illegal instruction at the `syscall`), so EAC games exited within seconds on that Proton | the retried `syscall` runs as the Linux syscall Wine re-allowed | `eac-tests/sud-native-retry` |
+
+**Cost.** One more condition on the `rt_sigreturn` path of a trap frame; nothing elsewhere.
+
+**Verified by.** The test passes natively on x86-64 (GitHub runner) and under the patched FEX, and crashes at the first
+retry on `eac-2610.4`. ASM 7551/7551 and InstCountCI 108/108 on a GitHub Arm64 runner; `eac-tests/run-all.sh` as
+expected in the SteamOS guest. Live: VRChat with EAC on Proton Experimental 11.0-20261027b, "AntiCheat Session Begin:
+Success" and in a world (on `eac-2610.4` it exited after 12 s).
 
 ---
 
