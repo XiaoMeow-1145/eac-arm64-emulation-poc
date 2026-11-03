@@ -1,109 +1,161 @@
-# eac-arm64-emulation-poc [English](README.md)
+# eac-arm64-emulation-poc
 
-**概念验证：在 arm64 Linux 机器上通过 FEX-Emu 运行带真正 Easy Anti-Cheat 的 VRChat —— 以及为达成这一目标所做的一切。**
+**一个概念验证：在 arm64 Linux 机器上通过 FEX-Emu 运行带正版 Easy Anti-Cheat 的 VRChat —— 以及为此所付出的一切。**
 
-> **提醒：此处有龙（风险较高），请注意相关风险。** 我个人尚未观察到任何问题，但这是在开发者不支持的配置（模拟的 x86 CPU，通常还在虚拟机内）上运行受反作弊保护的游戏的尝试。反作弊或游戏服务条款可能将其视为违规，账号可能被采取行动；请使用你承受得起损失的账号。这些脚本会替换 Steam 的 FEX 工具内的文件（`restore` 会恢复 Valve 的原版文件），此处任何内容均未得到 Valve、Epic Games、FEX-Emu 项目或任何游戏开发商的认可。不提供任何担保；参见[许可协议](#license)。
+> **提醒：此处有龙，请留意相关风险。** 我本人尚未观察到任何问题，但这门做法是在开发者并不支持的配置（模拟的 x86
+> CPU，且常常位于虚拟机内）上运行受反作弊保护的游戏。反作弊系统或游戏的用户协议可能将其视为违规，账号处罚是有可能的；
+> 请使用你能承受失去的账号。脚本会替换 Steam 的 FEX 工具中的文件（`restore` 会把 Valve 原版放回去），本文所述内容
+> 未获 Valve、Epic Games、FEX-Emu 项目或任何游戏开发商背书。不提供任何担保；见[许可协议](#许可协议)。
 
-这是一个独立的仓库。它记录了调查过程以及对 **FEX-Emu**（2610；基于 2609.1 开发）所做的修改，这些修改是在 arm64 主机上启动一款带 Epic 的 Easy Anti-Cheat for Linux/Proton 的 x86-64 游戏所必需的：修改以补丁文件的形式保留，你可以自行应用，并附有说明每个补丁修复了什么问题的测试，以及发现这些问题的诊断工具。
+这是一个独立仓库。它记录了一项调查过程，以及对 **FEX-Emu**（2610；在 2609.1 上开发）所做的修改——这些修改是在 arm64
+主机上，把一个 x86-64 游戏连同 Epic 为 Linux/Proton 提供的 Easy Anti-Cheat 跑起来所必需的：所有修改都以补丁文件的形式
+保留，你可以自行应用，并附带展示每个补丁修复了什么问题的测试，以及定位这些问题的诊断工具。
 
-![VRChat 在 Apple M2 上的 Fedora Asahi Remix 中通过打补丁的 FEX-Emu 运行，旁边是主机的 `fastfetch`](docs/img/vrchat-m2.png)
+![在 Apple M2 上、于 Fedora Asahi Remix 下通过打过补丁的 FEX-Emu 运行的 VRChat，旁边是主机的 `fastfetch`](docs/img/vrchat-m2.png)
 
-它刻意限定为**一块 SoC 上的一款游戏**（Apple M2 上的 VRChat：在 [muvm](https://github.com/AsahiLinux/muvm) 微虚拟机内的 Fedora Asahi Remix 下开发，也已在 macOS 上验证，见下文）。把它当作起点并进一步推进——另一款游戏、另一块 SoC、另一台主机——但请在此处报告你发现的问题，而不是只在 fork 中修复；参见[Bugs、修复与上游贡献](#bugs-fixes-and-upstreaming)。
+它刻意限定为**一个游戏、一颗 SoC**（Apple M2 上的 VRChat：在 [muvm](https://github.com/AsahiLinux/muvm) 微虚拟机
+内的 Fedora Asahi Remix 下开发，另在 macOS 上验证过，见下文）。请把它当作起点并继续推进——换一个游戏、换一颗 SoC、
+换一台主机——但发现问题时请在这里反馈，而不是只在自己的 fork 里修掉；见[Bugs、修复与上游贡献](#bugs修复与上游贡献)。
 
-**macOS。** 同一套打补丁的 FEX 也能在 macOS 27 的 Apple M2 MacBook Air 上运行带正版 EAC 的 VRChat，环境为 [steamac](https://github.com/fxgl/steamac) libkrun 客户机（Valve 的 ARM64 SteamOS，Steam 自带的 FEX 兼容工具被替换为打补丁的构建）。结果、耗时与限制：[docs/macos-port.md](docs/macos-port.md)。搭建步骤及后续修复（包括用于 Direct3D 11 的 DXMT 图形路径）位于另一个独立的 fork：[StonkGuy/steamac](https://github.com/StonkGuy/steamac)（`main` 及其面向玩家的发行版，`fex-eac` 用于开发）。
+**喜欢它？来帮它一把。** 给仓库点个星、出问题时开个 issue（附上你的硬件和日志）、以及 pull request 都很欢迎。
+如果你维护的 fork 里有修复或改进，也请在这里开一个 pull request：它会得到审查、记入你的贡献，并交付给所有人。
 
-**Steam Frame。** 你是看到 Steam Frame 相关帖子来到这里的吗？从 [docs/steam-frame.md](docs/steam-frame.md) 开始：获取 shell，使用 [`scripts/steamos/`](scripts/steamos) 在 Frame 上构建打补丁的 FEX，将其替换到 Steam 的 FEX 工具中，设置启动选项。已有其他用户报告可用；此处未做测试。
+**macOS。** 同一份打过补丁的 FEX 也能在 macOS 27 下的 Apple M2 MacBook Air 上、于
+[steamac](https://github.com/fxgl/steamac) 的 libkrun 客户机内运行带正版 EAC 的 VRChat（客户机是 Valve 的 ARM64
+SteamOS，Steam 自带的 FEX 兼容工具被替换为打过补丁的版本）。结果、耗时与限制见：[docs/macos-port.md](docs/macos-port.md)。
+安装步骤与下游修复（包括 Direct3D 11 的 DXMT 图形路径）位于单独的 fork
+[StonkGuy/steamac](https://github.com/StonkGuy/steamac)（`main` 及其 release 供玩家使用，`fex-eac` 用于开发）。
 
-困难之处不在于 CPU 速度，而在于**保真度**。反作弊启动器通过 `ptrace` 将其客户端注入游戏，而模拟器必须在 `ptrace`、信号和 `/proc` 方面表现得像一个真正的 Linux 内核，这是其他任何东西都未曾要求过的；后来，VRChat 自身的网络线程又暴露了 FEX 信号处理与 Linux 不同的另外两个地方。
+**Steam Frame。** 你是从一篇关于 Steam Frame 的帖子找过来的？请先看 [docs/steam-frame.md](docs/steam-frame.md)：拿到
+shell，在 Frame 上用 [`scripts/steamos/`](scripts/steamos) 构建打过补丁的 FEX，把它换进 Steam 的 FEX 工具，设置启动
+选项。已由另一位用户报告可用；此处未做测试。
+
+真正的难点不在 CPU 速度，而在**保真度**。反作弊启动器用 `ptrace` 把自己的客户端注入游戏，模拟器必须在 `ptrace`、信号
+和 `/proc` 方面表现得像真正的 Linux 内核——此前没有任何东西对 FEX 提出过这样的要求；后来，VRChat 自己的网络线程又暴露出
+两处 FEX 信号处理与 Linux 不一致的地方。
 
 ## 需要什么
 
 | 你需要 | 原因 |
 |---|---|
-| **FEX-Emu 2610 及补丁：[StonkGuy/FEX](https://github.com/StonkGuy/FEX/tree/eac-2610) 标签 `eac-2610.2`** | 参见 [docs/patches.md](docs/patches.md)；用 `scripts/build-fex.sh` 构建 |
-| **arm64 Linux 主机**（已验证：Apple M2 + Fedora Asahi Remix + muvm，或 macOS 27 + steamac libkrun 客户机） | 16 KB 页面的主机需要 4 KB 页面的客户机，因此需要 muvm 虚拟机；在 4 KB 页面主机上 FEX 可直接运行（未测试） |
-| **Proton Experimental 11.0** 和 *Proton EasyAntiCheat Runtime*，Steam 与 FEX 位于虚拟机边界的同一侧 | 此处所有内容均基于这些版本测量 |
-| 主机内存调优（`scripts/host-tune.sh`，Asahi，16 GB） | 16 GB 下，约 8 GB 虚拟机加 GPU 缓冲时主机内存耗尽；zswap/zram/水位设置可避免 OOM killer |
-| `scripts/` 中的启动选项和 DXVK caps | `scripts/set-launch-options.sh`、`scripts/dxvk.conf` |
+| **带补丁的 FEX-Emu 2610：[StonkGuy/FEX](https://github.com/StonkGuy/FEX/tree/eac-2610) 标签 `eac-2610.5`** | 见 [docs/patches.md](docs/patches.md)；用 `scripts/build-fex.sh` 构建 |
+| **一台 arm64 Linux 主机**（已测试：Apple M2 + Fedora Asahi Remix + muvm，或 macOS 27 + steamac 的 libkrun 客户机） | 16 KB 页的主机需要 4 KB 页的客户机，因此要用 muvm 虚拟机；在 4 KB 页主机上 FEX 可直接运行（未测试） |
+| **Proton Experimental 11.0** 与 *Proton EasyAntiCheat Runtime*，且 Steam 与 FEX 位于 VM 边界的同一侧 | 本文全部数据均在这些版本上测得 |
+| 主机内存调优（`scripts/host-tune.sh`，Asahi，16 GB） | 16 GB 主机在约 8 GB 虚拟机加 GPU 缓冲区时就会内存不足；zswap/zram/watermark 设置可避免 OOM killer 介入 |
+| `scripts/` 中的启动选项与 DXVK 配置项 | `scripts/set-launch-options.sh`、`scripts/dxvk.conf` |
 
-补丁系列分为**修复**和**诊断**两类——补丁 0001（`ptrace`）、0002（SMC 热页）和 0007（信号掩码）是运行所必需的；0008 和 0010 是同一领域的正确性修复，其余是性能、内核保真度或工具。[docs/patches.md](docs/patches.md) 解释了每个补丁及其理由：
+补丁系列分为**修复**与**诊断**两类——补丁 0001（`ptrace`）、0002（SMC 热页）和 0007（信号掩码）是运行所必需的；
+0008 与 0010 是同一领域的正确性修复，其余则是性能、内核保真度或工具。[docs/patches.md](docs/patches.md) 解释了每个补丁
+及其推理：
 
-| 补丁 | 分组 | 用途 |
+| 补丁 | 类别 | 用途 |
 |---|---|---|
-| 0001 `ptrace` 模拟 | 修复 | EAC 启动器用 `ptrace` 注入其客户端；FEX 模拟被跟踪进程（tracee）的 x86-64 视角。没有它，启动器会失败（`Unexpected error. (#1)`） |
-| 0007 信号掩码 | 修复 | 客户机处理程序以 Linux 信号掩码运行。没有它，约每两次会话就会出现一次 Photon 超时 |
-| 0008 系统调用信息 | 修复 | 从系统调用进入的处理程序会保留其设置的寄存器 |
-| 0010 seccomp 陷阱 | 修复 | `SECCOMP_RET_TRAP` 的 `SIGSYS` 报告的是系统调用之后的指令，与 Linux 一致；没有它，Wine 的系统调用陷阱过滤器会永远重新执行被陷阱捕获的系统调用 |
-| 0004 廉价失效 | 性能 | 约 200 个线程时，数据页上的 `mmap`/`mprotect` 便宜约 22 倍；没有它，join 需要 60 多秒 |
-| 0002 SMC 热页 | 修复 | 持续触发自修改代码缺页的页面不再被写保护。没有它，反作弊客户端永远加载不完，游戏无法启动 |
-| 0003/0005/0006/0009 | **诊断** | 统计、采样器和线程快照（0009 在快照中加入了 futex 字）——是工具，不是修复 |
-| 0011–0020 内核保真度 | 保真度 | 真实内核在 `arch_prctl`（0011）、调试寄存器（0012）、`/proc/<pid>/status`（0013）、未知 regset（0014）、`restart_syscall`（0015）和信号帧（0016–0020）上给出的答案。不在 VRChat 的路径上；其他游戏或 Wine 会观察到它们 |
-| 0022–0026 第二波 | 保真度 | 每次 seccomp 陷阱的主机栈泄漏（0022）、客户机读取 FEX 的 call/ret 影子栈保护页（0023）、IRETQ 目标上的 TF 陷阱（0025）、线程在信号备用栈上退出时的信号备用栈（0026）；0024 是分析器选项。在第二款游戏（THE FINALS）上发现，其反篡改引导程序会观察它们；仅涉及陷阱、故障和退出路径 |
-| 0033 `/proc/<pid>/maps` | 修复 | maps 文件只列出被模拟进程的映射（低于 2^47），而不列出 FEX 及其 AArch64 主机库。没有它，EAC 启动器中从子进程 maps 里挑选库并注入的模块会选择主机库并以 `210 Unexpected error. (#1)` 失败（在 Mini Royale 通过 Proton 时出现；VRChat 的部署仍提供较旧的模块，尚未受影响） |
-| 0035 SMC，远程写入 | 修复 | 客户机设为可写（`mprotect` RX 到 RWX）的代码页对其他进程保持可写，因此用 `NtWriteVirtualMemory` 写入的钩子不再以 `STATUS_PARTIAL_COPY` 失败。基于 yungtry 的补丁 0028；使用者为 The Division 2（据其作者）；仅在 `SMCChecks=mtrack` 下生效 |
+| 0001 `ptrace` 模拟 | 修复 | EAC 启动器用 `ptrace` 注入其客户端；FEX 需要模拟被跟踪进程的 x86-64 视图。缺少它启动器会失败（`Unexpected error. (#1)`） |
+| 0007 信号掩码 | 修复 | 客户机信号处理器以 Linux 的信号掩码运行。缺少它，几乎每隔一次会话就会出现 Photon 超时 |
+| 0008 系统调用信息 | 修复 | 从系统调用进入的处理器会保留其设置的寄存器 |
+| 0010 seccomp trap | 修复 | `SECCOMP_RET_TRAP` 的 `SIGSYS` 报告的是系统调用之后的那条指令，与 Linux 一致；缺少它，Wine 的系统调用捕获过滤器会无限重复执行被捕获的系统调用 |
+| 0004 廉价失效 | 性能 | 在约 200 个线程下，数据页上的 `mmap`/`mprotect` 便宜约 22 倍；缺少它，加入要 60 秒以上 |
+| 0002 SMC 热页 | 修复 | 反复触发自修改代码缺页的页不再被写保护。缺少它反作弊客户端永远加载不完，游戏无法启动 |
+| 0003/0005/0006/0009 | **诊断** | 统计、采样器与线程快照（0009 把 futex word 加入快照）——是工具，不是修复 |
+| 0011–0020 内核保真度 | 保真 | 真实内核在 `arch_prctl`（0011）、调试寄存器（0012）、`/proc/<pid>/status`（0013）、未知 regset（0014）、`restart_syscall`（0015）和信号帧（0016–0020）上给出的答案。不在 VRChat 的路径上；某个游戏或 Wine 会观察到它们 |
+| 0022–0026 第二波 | 保真 | 每次 seccomp trap 泄漏的主机栈（0022）、客户机读取 FEX 的 call/ret 影子栈保护页（0023）、IRETQ 目标上的 TF 陷入（0025）、线程在该栈上退出时的信号备用栈（0026）；0024 是一个 profiler 选项。在另一款游戏（THE FINALS）上发现，其防篡改引导程序会观察到这些；仅涉及陷入、缺页与退出路径 |
+| 0033 `/proc/<pid>/maps` | 修复 | maps 文件只列出被模拟进程的映射（低于 2^47），不含 FEX 及其 AArch64 主机库。缺少它，EAC 启动器中会从子进程 maps 里挑一个库注入的模块会挑到主机库，并以 `210 Unexpected error. (#1)` 失败（在 Mini Royale 经 Proton 运行时观察到；VRChat 的部署仍在使用不受影响的旧模块） |
+| 0035 SMC、远程写入 | 修复 | 客户机设为可写的代码页（`mprotect` 从 RX 改为 RWX）对其他进程也保持可写，因此用 `NtWriteVirtualMemory` 写入的 hook 不再以 `STATUS_PARTIAL_COPY` 失败。基于 yungtry 的补丁 0028；使用方为 The Division 2（据其作者）；仅在 `SMCChecks=mtrack` 时生效 |
+| 0036–0039、0041–0053（eac-2610.3） | 修复 / 保真 | Wine 11 使用 seccomp 与 Syscall User Dispatch 陷入路径的方式（被捕获的系统调用从不执行、SUD 被模拟、不丢失不泄漏陷入帧、EFLAGS 第 31 位）、seccomp 下的 `execve`/`execveat`、`rt_sigreturn` 之后的 `InSyscallInfo`、错误指针返回 `-EFAULT`、内核写入代码页、跨 4 GiB 的 `munmap`、对跟踪器隐藏的 SIGBUS 停止（The Division 2 的 EAC 启动器）。见 [docs/patches.md](docs/patches.md#h-fixes-since-eac-26102--patches-00360039-00410053) |
+| 0054–0070（eac-2610.4） | 修复 / 保真 | THE FINALS 的防篡改代码探测的异常（带 NT 的 IRETQ、写入 FS/GS 的 MOV、超长指令、XSETBV、取指缺页地址）、编译时以 fault-safe 方式读取客户机代码（THE FINALS 对局内卡死）、该 fork 自己的磁盘缓存格式版本、上游的 `0F B8/BC/BD` 解码修复，以及仅对可能触及正在运行代码块的存储做 SMC 重启（Hell Let Loose 的 EAC `210 (#2)`）。见 [docs/patches.md](docs/patches.md#i-fixes-since-eac-26103--patches-00540070) |
+| 0071（eac-2610.5） | 修复 | Proton Experimental 11.0-20261027b 在 Syscall User Dispatch 下重试 EAC 的本机系统调用；信号返回到被捕获的 `syscall` 时恢复了过期的 FEX 状态，导致 EAC 游戏几秒内就退出 |
 
-## 各处的改动
+## 哪些地方改了什么
 
-涉及三种不同类型的改动。只有第一种是新代码；Wine 或 Proton 中没有任何东西被修补。
+涉及三类不同的改动。只有第一类是新增代码；Wine 和 Proton 中没有任何补丁。
 
 | 层 | 内容 | 类型 | 位置 |
 |---|---|---|---|
-| **FEX-Emu（模拟器）** | 0001 `ptrace` 模拟，0007/0008/0010 信号与 seccomp 保真度，0004 失效，0002 SMC 热页，0011–0020 内核保真度缺口（调试寄存器、`/proc`、`arch_prctl`、regset、`restart_syscall`、信号帧），0022/0023/0025/0026 主机栈、故障与单步保真度，0033 `/proc/<pid>/maps`，0035 SMC 远程写入，0024 分析器选项，0003/0005/0006/0009 诊断 | **新源代码**，FEX-2610 上每个补丁一个提交 | [StonkGuy/FEX](https://github.com/StonkGuy/FEX/tree/eac-2610) 分支 `eac-2610`（测试在 `eac-tests/` 中），由 `scripts/build-fex.sh` 构建；`patches/` 是生成的快照 |
-| **Proton / Wine** | `WINE_CPU_TOPOLOGY=16:…`（报告 16 个 CPU；修复 join 前的卡顿） | **原版 Proton 设置**，无补丁 | 启动选项，`scripts/set-launch-options.sh` |
-| | `EAC_LAUNCHERDIR`、`PROTON_EAC_RUNTIME`（加载 EAC 运行时）、`WINEDEBUG=-all`、`PROTON_USE_XALIA=0` | 原版 Proton 设置 | 启动选项 |
-| | `DXVK_CONFIG_FILE` → `dxgi.maxDeviceMemory`/`maxSharedMemory` = 3072 | 原版 DXVK 设置 | `scripts/dxvk.conf` |
-| **虚拟机和主机** | 客户机 NIC MTU 限制为 1500；≥ 8 GB 客户机内存；muvm 4 KB 页客户机 | 环境 | `scripts/vm/steam-vm.sh`、`scripts/vm/guest-setup.sh` |
-| | 16 GB 主机上的 zswap/zram/水位/预读调优 | 环境 | `scripts/host-tune.sh` |
+| **FEX-Emu（模拟器）** | 0001 `ptrace` 模拟、0007/0008/0010 信号与 seccomp 保真、0004 失效、0002 SMC 热页、0011–0020 内核保真度缺口（调试寄存器、`/proc`、`arch_prctl`、regset、`restart_syscall`、信号帧）、0022/0023/0025/0026 主机栈、缺页与单步保真、0033 `/proc/<pid>/maps`、0035 SMC 远程写入、0036–0039/0041–0053 陷入、exec 与系统调用修复、0024 profiler 选项、0003/0005/0006/0009 诊断 | **新增源代码**，在 FEX-2610 上每个补丁一个 commit | [StonkGuy/FEX](https://github.com/StonkGuy/FEX/tree/eac-2610) 分支 `eac-2610`（测试在 `eac-tests/`），由 `scripts/build-fex.sh` 构建；`patches/` 是生成的快照 |
+| **Proton / Wine** | `WINE_CPU_TOPOLOGY=16:…`（上报 16 个 CPU；修复加入前的卡顿） | **原生 Proton 设置**，无补丁 | 启动选项，`scripts/set-launch-options.sh` |
+| | `EAC_LAUNCHERDIR`、`PROTON_EAC_RUNTIME`（加载 EAC 运行时）、`WINEDEBUG=-all`、`PROTON_USE_XALIA=0` | 原生 Proton 设置 | 启动选项 |
+| | `DXVK_CONFIG_FILE` → `dxgi.maxDeviceMemory`/`maxSharedMemory` = 3072 | 原生 DXVK 设置 | `scripts/dxvk.conf` |
+| **虚拟机与主机** | 客户机网卡 MTU 限制为 1500；客户机 RAM ≥ 8 GB；muvm 的 4 KB 页客户机 | 环境 | `scripts/vm/steam-vm.sh`、`scripts/vm/guest-setup.sh` |
+| | 16 GB 主机上的 zswap/zram/watermark/预读调优 | 环境 | `scripts/host-tune.sh` |
 | | 可选的 SMBIOS/DMI/PCI/主机名拟真层 | 环境，可选 | `scripts/vm/realism.sh` |
 
-## 涉及的内容
+## 其中经历了什么
 
-1. **EAC 启动器**需要其被跟踪进程的 x86-64 `ptrace` 视角、客户机二进制文件的 `/proc/<pid>/exe` 以及客户机 `int3` 的信号投递停止；整个过程由一个独立测试复现（`eac-tests/ptrace-inject`，[docs/how-it-works.md](docs/how-it-works.md)）。
-2. **耗时一分钟的 join** 是约 200 个线程进程中的代码失效开销（补丁 0004，借助补丁 0003 的统计发现）。
-3. **主机 OOM 杀掉整个虚拟机**：内存调优和虚拟机大小（[docs/tuning.md](docs/tuning.md)）。
-4. **Photon 超时**（约每两次会话一次）是 Wine 等待协议中丢失的唤醒：FEX 以错误的信号掩码运行客户机信号处理程序（补丁 0007）。找到它需要一个不对反作弊做 `ptrace` 的线程快照设施、一个独立的 Wine 复现程序，以及对 wineserver 的 epoll 注册的检查（[docs/disconnects.md](docs/disconnects.md)）。测试 0007 时又发现了同族的第二个 FEX 错误（信号处理程序内寄存器丢失，*补丁 0008*）。
-5. **某些启动时约 60 秒的冻结**（Photon 区域查找超时，然后进入 `Disconnecting` 重连循环）是游戏的 IL2CPP 线程池在 4 vCPU 虚拟机上饿死。不是 FEX 或 Wine 的错误：用 Proton 的 `WINE_CPU_TOPOLOGY` 报告 16 个 CPU 即可消除。通过进程内线程快照和 wineserver 套接字状态的被动读取器发现（[docs/disconnects.md](docs/disconnects.md)）。
+1. **EAC 启动器**需要其被跟踪进程的 x86-64 `ptrace` 视图、客户机二进制的 `/proc/<pid>/exe`，以及客户机 `int3` 的
+   信号投递停顿；整个交互过程由一个独立测试（`eac-tests/ptrace-inject`，[docs/how-it-works.md](docs/how-it-works.md)）复现。
+2. **加入要花一分钟**，原因是约 200 线程的进程中代码失效的开销（补丁 0004，用补丁 0003 的统计发现）。
+3. **整台虚拟机被主机 OOM 杀死**：内存调优与虚拟机规格（[docs/tuning.md](docs/tuning.md)）。
+4. **Photon 超时**（大约每隔一次会话）是 Wine 等待协议中的唤醒丢失：FEX 用错误的信号掩码运行客户机信号处理器
+   （补丁 0007）。定位它需要一个不对反作弊执行 `ptrace` 的线程快照设施、一个独立的 Wine 复现程序，以及查看
+   wineserver 的 epoll 注册（[docs/disconnects.md](docs/disconnects.md)）。测试 0007 时又发现了同族的第二个 FEX 缺陷
+   （信号处理器内寄存器丢失，*补丁 0008*）。
+5. 某些启动时**约 60 秒的卡死**（Photon 区域查询超时，随后进入 `Disconnecting` 重连循环）是游戏的 IL2CPP 线程池在
+   4 vCPU 虚拟机上被饿死。不是 FEX 或 Wine 的缺陷：用 Proton 的 `WINE_CPU_TOPOLOGY` 上报 16 个 CPU 即可消除。
+   通过进程内线程快照和 wineserver socket 状态的被动读取器发现（[docs/disconnects.md](docs/disconnects.md)）。
 
 ## 快速开始（已验证平台：Fedora Asahi Remix）
 
-在 Steam Frame（或其他 arm64 SteamOS 设备）上，请改用 [docs/steam-frame.md](docs/steam-frame.md)。
+在 Steam Frame（或其他 SteamOS arm64 设备）上，请改为参考 [docs/steam-frame.md](docs/steam-frame.md)。
 
 ```sh
-sudo dnf install steam muvm fex-emu && steam          # 基础安装，登录，安装 VRChat，启动一次
-scripts/build-fex.sh                                  # 将 StonkGuy/FEX 标签 eac-2610.2 克隆并构建到 work/FEX
+sudo dnf install steam muvm fex-emu && steam          # 基础安装、登录、安装 VRChat、启动一次
+scripts/build-fex.sh                                  # 克隆并构建 StonkGuy/FEX 标签 eac-2610.5 到 work/FEX
 scripts/vm/install-overlay.sh
 (cd work/FEX/eac-tests/ptrace-inject && ./build.sh clang)
-scripts/vm/run-test-in-vm.sh work/FEX/eac-tests/ptrace-inject/ptrace_inject_test   # 必须输出 RESULT: PASS
+scripts/vm/run-test-in-vm.sh work/FEX/eac-tests/ptrace-inject/ptrace_inject_test   # 必须打印 RESULT: PASS
 scripts/vm/run-test-in-vm.sh <其他 eac-tests 二进制>  # 例如 signal-mask、signal-regs：RESULT: PASS
-sudo scripts/host-tune.sh                             # 内存调优（可选，16 GB 强烈建议）
-scripts/set-launch-options.sh                         # 关闭 Steam 后运行
+sudo scripts/host-tune.sh                             # 内存调优（可选，16 GB 主机上强烈推荐）
+scripts/set-launch-options.sh                         # 需先关闭 Steam
 REALISM=1 VM_MEM_MB=10240 VM_VRAM_MB=3072 scripts/vm/steam-vm.sh   # 在虚拟机中启动 Steam（已验证配置；REALISM=1 可选），然后启动 VRChat
 ```
 
-完整的 A 到 Z 指南、精确的已验证版本以及什么会破坏可用配置：[docs/setup-asahi.md](docs/setup-asahi.md)。工具：[docs/tools.md](docs/tools.md)。哪些可用、哪些待定：[docs/status.md](docs/status.md)。
+完整的 A 到 Z 指南、确切的已验证版本，以及什么会弄坏可用的配置：[docs/setup-asahi.md](docs/setup-asahi.md)。工具：
+[docs/tools.md](docs/tools.md)。哪些能用、哪些仍未解决：[docs/status.md](docs/status.md)。
 
 ## 范围与限制
 
-* **不是反作弊绕过。** 没有任何东西伪造、重放或短路 EAC 的结果；不包含任何 Epic 或 VRChat 的二进制、密钥或痕迹。补丁只是让 FEX 在 `ptrace`、信号和 `/proc/<pid>/exe` 方面表现得像真正的 Linux 内核，运行的 EAC 客户端是来自 Valve 的 Proton EAC Runtime 的原版、未修改版本。
-* **一个坦率说明的告诫。** 可选的 `scripts/vm/realism.sh` **不**触碰 EAC，但它也不是纯粹的模拟保真度：它向客户机提供看似合理的 SMBIOS/DMI 数据，使其看起来不那么像微虚拟机（并且，比 VRChat 的指南更进一步，还包括 PCI 设备列表和主机名）。这是遵循 VRChat 自己发布的指南《在虚拟机中使用 VRChat》的*环境适配*，该指南称 EAC 的 VM 阻止是其 CPUID 管理程序厂商检查，并且**"在某些情况下你可以让虚拟化与 EAC 共存，我们也不介意你这样做。"** 请将其理解为政策声明而非许可：属于"容忍但不受支持"，本仓库将该脚本标记为**可选**：没有它 VRChat 也能运行。它可能对反作弊检查机器硬件身份的其他游戏有用。它不修改游戏或反作弊。
-* **VRChat 不支持。** VRChat 不支持虚拟机或模拟；Epic/VRChat 可随时更改任何内容，是否执行由他们决定。自行承担风险，绝不运行修改过的客户端。切勿对运行中的游戏附加调试器或 `perf`：EAC 会报告。
+* **这不是反作弊绕过。** 任何东西都不伪造、重放或短路 EAC 的判定结果；不包含任何 Epic 或 VRChat 的二进制、密钥或
+  追踪记录。补丁只是让 FEX 在 `ptrace`、信号和 `/proc/<pid>/exe` 方面表现得像真正的 Linux 内核，而运行起来的 EAC
+  客户端就是 Valve 的 Proton EAC Runtime 中未经修改的原版。
+* **一处需要直说的保留。** 可选的 `scripts/vm/realism.sh` **不会**触碰 EAC，但它也不是纯粹模拟保真：它会向客户机
+  呈现看似合理的 SMBIOS/DMI 数据，使其不那么像微虚拟机（并且，比 VRChat 的指南更进一步，还有 PCI 设备列表与主机名）。
+  那属于*环境适配*，遵循 VRChat 自己发布的指南《Using VRChat in a Virtual Machine》，该指南说明 EAC 的虚拟机封禁来自其
+  CPUID hypervisor-vendor 检查，并且**"You can get virtualization working alongside EAC in some cases, and we don't mind
+  if you do this."** 请将其视为政策声明而非许可：属于"被容忍但不被支持"，且本仓库将该脚本标记为**可选**：不运行它
+  VRChat 也能跑。对于反作弊会检查机器硬件身份的其他游戏，它可能有用。它不会修改游戏或反作弊。
+* **不受 VRChat 支持。** VRChat 不支持虚拟机或模拟；Epic/VRChat 可随时更改任何内容，封禁与否由他们决定。风险自负，
+  绝不要运行被修改的客户端。绝不要对运行中的游戏附加调试器或 `perf`：EAC 会报告。
 
 ## Bugs、修复与上游贡献
 
-**发现 bug，或发现打补丁的 FEX 在某些地方仍与 x86-64 Linux 行为不同？** 请在此处以 issue 形式报告。如果你已经在自己 fork 中修复，请考虑也在此处发起拉取请求（附带测试），这样大家都能获得修复，测试套件也能覆盖它。FEX 代码改动以拉取请求形式提交到 [StonkGuy/FEX](https://github.com/StonkGuy/FEX)，针对当前的 `eac-<release>` 分支，并在其 `eac-tests/` 中附带测试。
+**发现了缺陷，或者发现打过补丁的 FEX 仍与 x86-64 Linux 行为不同？** 请在这里以 issue 形式反馈。如果你已在自己的
+fork 中修好，请考虑同时在这里开一个 pull request（附带测试），这样所有人都能得到该修复，测试套件也会覆盖它。
+FEX 代码改动请以 pull request 形式提交到 [StonkGuy/FEX](https://github.com/StonkGuy/FEX)，针对当前的 `eac-<release>`
+分支，并在其 `eac-tests/` 中附上测试。
 
-本仓库不向上游 FEX-Emu 或 Proton 发送补丁，也与它们无关（steamac 的改动直接与其维护者讨论）。如果你审查过某个补丁并认为它足够好可以上游，**欢迎你自行提交**：保留其测试，遵循上游项目自己的流程，并注明来源。其他打过补丁的组件（libkrun、Mesa/KosmicKrisp、virglrenderer、DXMT）同样适用，除非该项目自己的规则另有规定——例如 DXMT 不接受 AI 辅助的贡献。
+本仓库不向 FEX-Emu 或 Proton 本身发送补丁，也与它们无从属关系（steamac 的改动直接与其维护者讨论）。如果你审查了某个
+补丁并认为它足以进入上游，**欢迎你自行提交**：连同其测试一起，遵循上游项目自己的流程，并注明来源。对其他被修改的组件
+（libkrun、Mesa/KosmicKrisp、virglrenderer、DXMT）同样适用，除非该项目自己的规则另有规定——例如 DXMT 不接受 AI 辅助
+的贡献。
 
 ## 维护与支持
 
-我会尽量让打过补丁的组件跟上其上游版本，每次更新都重新运行回归测试，一旦上游覆盖了某个行为就移除对应补丁。对于游戏特有的问题我会尽力帮忙，但我不能保证每款游戏或每个修复都能奏效。
+我会尽量让被修改的组件跟上上游发布，每次更新都重跑回归测试，并在上游覆盖某补丁的行为后移除该补丁。对于特定游戏的问题，
+我会尽量在能力范围内提供帮助，但无法保证每个游戏、每个修复都能生效。
 
-每个 FEX 版本都以同样方式处理：将补丁变基到该版本，作为 StonkGuy/FEX 的 `eac-<release>` 分支，在客户机中运行 `eac-tests` 并在本机运行作为 oracle，检查一次真实 VRChat 会话，移除所有上游现已提供相应行为的补丁，并打上标签；本仓库和 steamac fork 随后固定到新标签。
+每个 FEX 版本都以同样方式处理：把补丁变基到该版本，作为 StonkGuy/FEX 的 `eac-<release>` 分支，在客户机中以及在本机
+（作为对照基准）运行 `eac-tests`，检查一次实际的 VRChat 会话，移除上游已提供其行为的每个补丁，然后打标签；本仓库与
+steamac fork 随后固定到新标签。
 
-## 其他 EAC 游戏和 FEX 主机
+## 其他 EAC 游戏与 FEX 主机
 
-Proton EAC 运行时对每款提供 Linux EAC 的游戏都是同一套启动器/客户端机制，因此 `ptrace` 工作并非 VRChat 特有；每款游戏仍有自己的 EAC 构建、完整性检查和服务器端策略。VRChat 已端到端验证；Mini Royale 的 EAC 启动器在 0033 下也能到达 `301`（游戏本身未越过其账号提示继续游玩）。不同游戏结果不同：每款游戏自带其 EAC 构建和检查，因此未测试的游戏可能可用也可能不可用。除 Asahi 和上述 macOS 客户机外，其他 FEX 主机均未测试，Steam Frame 除外（来自另一位用户 @VirtuallyNoxide 的发现；搭建见 [docs/steam-frame.md](docs/steam-frame.md)）——参见 [docs/other-platforms.md](docs/other-platforms.md)。
+Proton EAC 运行时对所有随 Linux EAC 发布的游戏都是同一套启动器/客户端机制，所以 `ptrace` 相关工作并非 VRChat 专属；
+但每个游戏仍有自己的 EAC 构建、完整性检查和服务器端策略。VRChat 已端到端验证；Mini Royale 的 EAC 启动器在 0033 下
+也能到达 `301`（游戏本身未越过账号提示进行游玩）。结果因游戏而异：每款作品都自带 EAC 构建与检查，因此未测试的游戏可能
+能用也可能不能用。除上文 Asahi 与 macOS 客户机外，其他 FEX 主机均未测试，例外是 Steam Frame（来自另一位用户
+@VirtuallyNoxide 的发现；安装见 [docs/steam-frame.md](docs/steam-frame.md)）——见
+[docs/other-platforms.md](docs/other-platforms.md)。
 
 ## 许可协议
 
-MIT（参见 [LICENSE](LICENSE)）；补丁修改的是同为 MIT 许可的 FEX-Emu。
+MIT（见 [LICENSE](LICENSE)）；这些补丁修改的 FEX-Emu 同样为 MIT。
